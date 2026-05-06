@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CREW
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum DrillType {
+  FIRE_DRILL
+  EVACUATION
+  MAN_OVERBOARD
+  COLLISION
+  FLOODING
+  MEDICAL_EMERGENCY
+}
+
+enum DrillStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(CREW)
+  shipId    String?  @db.ObjectId
+  ship      Ship?    @relation(fields: [shipId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedTasks     MaintenanceTask[] @relation("AssignedTo")
+  createdTasks      MaintenanceTask[] @relation("CreatedBy")
+  taskComments      TaskComment[]
+  drillAttendances  DrillAttendance[]
+
+  @@map("users")
+}
+
+model Ship {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  imoNumber    String   @unique
+  type         String
+  flag         String
+  builtYear    Int
+  grossTonnage Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users            User[]
+  maintenanceTasks MaintenanceTask[]
+  safetyDrills     SafetyDrill[]
+
+  @@map("ships")
+}
+
+model MaintenanceTask {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String
+  status      TaskStatus @default(PENDING)
+  priority    String     @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  dueDate     DateTime
+  shipId      String     @db.ObjectId
+  ship        Ship       @relation(fields: [shipId], references: [id])
+  assignedToId String?   @db.ObjectId
+  assignedTo   User?     @relation("AssignedTo", fields: [assignedToId], references: [id])
+  createdById  String    @db.ObjectId
+  createdBy    User       @relation("CreatedBy", fields: [createdById], references: [id])
+  completedAt  DateTime?
+  isOverdue    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  comments TaskComment[]
+
+  @@map("maintenance_tasks")
+}
+
+model TaskComment {
+  id        String          @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  taskId    String          @db.ObjectId
+  task      MaintenanceTask @relation(fields: [taskId], references: [id])
+  userId    String          @db.ObjectId
+  user      User            @relation(fields: [userId], references: [id])
+  createdAt DateTime        @default(now())
+
+  @@map("task_comments")
+}
+
+model SafetyDrill {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  title        String
+  type         DrillType
+  description  String
+  status       DrillStatus @default(SCHEDULED)
+  scheduledAt  DateTime
+  completedAt  DateTime?
+  shipId       String      @db.ObjectId
+  ship         Ship        @relation(fields: [shipId], references: [id])
+  location     String?
+  instructions String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  attendances DrillAttendance[]
+
+  @@map("safety_drills")
+}
+
+model DrillAttendance {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  drillId     String      @db.ObjectId
+  drill       SafetyDrill @relation(fields: [drillId], references: [id])
+  userId      String      @db.ObjectId
+  user        User        @relation(fields: [userId], references: [id])
+  attended    Boolean     @default(false)
+  notes       String?
+  submittedAt DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@unique([drillId, userId])
+  @@map("drill_attendances")
+}
